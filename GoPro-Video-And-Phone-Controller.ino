@@ -42,7 +42,7 @@ const char* password = "";                    // your network password
 
 const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = -(8*3600);
-int   daylightOffset_sec = 0;  // 3600;
+int   daylightOffset_sec = 3600;  //  = 0;
 
 
 SoftwareSerial espSerialPhone(19,18);
@@ -439,20 +439,30 @@ void on_ble_receive(std::string msg)
   int iCommand = 0;
   strcpy(strCommand, msg.c_str());
 
+Serial.print("strCommand = [");
+Serial.print(strCommand);
+Serial.println("]");
+  if (strncmp(strCommand, "14", 2) == 0)
+  {
+    daylightOffset_sec = 3600;
+    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+    printLocalTime();
+//    return;    
+  }
+  if (strncmp(strCommand, "15", 2) == 0)
+  {
+    daylightOffset_sec = 0;
+    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+    printLocalTime();
+//    return;    
+  }
+
   espSerialPhone.print(strCommand);
-  return;
+//  return;
   
   if (isDigit(strCommand[0]) &&
       isDigit(strCommand[1]))
   {
-    struct tm timeinfo;
-    if(!getLocalTime(&timeinfo))
-    {
-      Serial.println("Failed to obtain time");
-      return;
-    }
-    char cbuf[16];
-    sprintf(cbuf, "%02i:%02i:%02i", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
     iCommand = ((strCommand[0]-'0')*10) + (strCommand[1]-'0');
     Serial.print("iCommand = ");
     Serial.println(iCommand);
@@ -469,9 +479,16 @@ void on_ble_receive(std::string msg)
       {
         SendString_ble("09 NTP ");
 
+        struct tm timeinfo;
+        if(!getLocalTime(&timeinfo))
+        {
+          Serial.println("Failed to obtain time");
+          return;
+        }
+        char cbuf[16];
+        sprintf(cbuf, "%02i:%02i:%02i", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
         //GetDateTime();
-        
-        Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
+        Serial.println(&timeinfo, "%Y-%m-%d %H:%M:%S");
         SendString_ble(cbuf);
         SendString_ble("\n");
         break;
@@ -585,11 +602,11 @@ void setup() {
   {
     Serial.print(".");
     digitalWrite(2, HIGH);
-    delay(500);
+    delay(250);
     digitalWrite(2, LOW);
-    delay(500);
+    delay(250);
     digitalWrite(2, HIGH);
-    delay(1000);
+    delay(500);
     digitalWrite(2, LOW);
     delay(500);
   }
@@ -640,278 +657,308 @@ void loop()
 {
   char in = 0;
   int iRet;
+  bool bGoProCommand = false;
 
   if (espSerialPhone.available() > 0)
   {
     char sBuff[2] = " ";
     sBuff[0] = espSerialPhone.read();
-    ble_send(sBuff);
-  }
 
-  return;
-
-  if (espSerialGoPro.available() > 0)
-  {
-    in = espSerialGoPro.read();
-#if DEBUG_OUTPUT
-{
-Serial.println("**********");
-Serial.println(in);
-Serial.println("**********");
-}
-#endif
-
-
-//////////////////////////////////////////////////////////////////////
-#if 0
-    switch (in)
+    if (sBuff[0] == 0x1B)
     {
-    default:
-      break;
-  
-    // Connect
-    case 'b':
-      if (gp.isConnected())
-      {
-        Serial.println("Already connected!");
-        break;
-      }
-  
-      lStartTimeMS = millis();
-      while ((iRet = gp.begin()) != 1)
-      {
-        Serial.print("gp.begin() = ");
-        Serial.println(iRet);
-        delay(2500);
-        if (millis() > (lStartTimeMS + GOPRO_CONNECT_TIMEOUT))
-        {
-          Serial.println("Connection failed, TIMEOUT");
-          break;
-        }
-      }
-      if (gp.isConnected() == false)
-      {
-        Serial.println("Probably connection lost!");
-      }
-      break;
-  
-    case 'c':
-      Serial.print("Connected: ");
-      if (gp.isConnected())
-      {
-        Serial.println("Yes");
-        espSerialGoPro.print('1');
-      }
-      else
-      {
-        Serial.println("No");
-        espSerialGoPro.print('0');
-      }
-      break;
-  
-    case 'p':
-      gp.confirmPairing();
-      break;
-  
-    case 's':
-      Serial.println("Status:");
-      gp.getStatus();
-      break;
-  
-    case 'm':
-      Serial.println("Media List:");
-      gp.getMediaList();
-      break;
-  
-    // Turn on and off
-    case 'T':
-      gp.turnOn();
-      break;
-  
-    case 't':
-      gp.turnOff();
-      break;
-  
-    // Take a picture or start a video
-    case 'A':
-      if (gp.isConnected())
-      {       
-        gp.shoot();
-        espSerialGoPro.print('1');
-      }
-      else
-      {
-        Serial.println("A failed: Not Connected");
-        espSerialGoPro.print('0');      
-      }
-      break;
-  
-    // Stop the video
-    case 'S':
-      if (gp.isConnected())
-      {       
-        gp.stopShoot();
-        espSerialGoPro.print('1');
-      }
-      else
-      {
-        Serial.println("S failed: Not Connected");
-        espSerialGoPro.print('0');      
-      }
-      break;
-  
-    // Check if it is recording
-    case 'r':
-      Serial.print("Recording: ");
-      Serial.println(gp.isRecording() == true ? "Yes" : "No");
-      break;
-  
-    // Set modes
-    case 'V':
-      if (gp.isConnected())
-      {       
-        gp.setMode(VIDEO_MODE);
-        espSerialGoPro.print('1');
-      }
-      else
-      {
-        Serial.println("V failed: Not Connected");
-        espSerialGoPro.print('0');      
-      }
-      break;
-  
-    case 'P':
-      if (gp.isConnected())
-      {       
-        gp.setMode(PHOTO_MODE);
-        espSerialGoPro.print('1');
-      }
-      else
-      {
-        Serial.println("P failed: Not Connected");
-        espSerialGoPro.print('0');      
-      }
-      break;
-  
-    case 'M':
-      gp.setMode(MULTISHOT_MODE);
-      break;
-  
-    // Change the orientation
-    case 'U':
-      gp.setOrientation(ORIENTATION_UP);
-      break;
-  
-    case 'D':
-      gp.setOrientation(ORIENTATION_DOWN);
-      break;
-  
-    // Change other parameters
-    case 'f':
-      gp.setVideoFov(MEDIUM_FOV);
-      break;
-  
-    case 'F':
-      gp.setFrameRate(FR_120);
-      break;
-  
-    case 'R':
-      gp.setVideoResolution(VR_1080p);
-      break;
-  
-    case 'h':
-      gp.setPhotoResolution(PR_12MP_WIDE);
-      break;
-  
-    case 'L':
-      gp.setTimeLapseInterval(60);
-      break;
-  
-    // Localize the camera
-    case 'O':
-      gp.localizationOn();
-      break;
-  
-    case 'o':
-      gp.localizationOff();
-      break;
-  
-    // Delete some files, be carefull!
-    case 'l':
-      gp.deleteLast();
-      break;
-  
-    case 'g':
-      gp.deleteAll();
-      break;
-  
-    // Print useful data
-    case 'd':
-      gp.printStatus();
-      break;
-  
-    // Close the connection
-    case 'X':
-      gp.end();
-      break;
-  
-    // Get current time
-    case '2':
-      GetLocalTime();
-      espSerialGoPro.print(timeBuffer);
-      break;
-      
-    // Open the connection
-    case '1':
-      lStartTimeMS = millis();
-      while ((iRet = gp.begin()) != 1)
-      {
-        Serial.print("gp.begin() = ");
-        Serial.println(iRet);
-        delay(2500);
-        if (millis() > (lStartTimeMS + GOPRO_CONNECT_TIMEOUT))
-        {
-          Serial.println("Connection failed, TIMEOUT");
-          break;
-        }
-      }
-      
-      if (gp.isConnected())
-      {
-        Serial.println("CONNECTED");
-        //gp.setMode(VIDEO_MODE);
-        espSerialGoPro.print('1');
-      }
-      else
-      {
-        Serial.print("CONNECTION FAILED!");
-        espSerialGoPro.print('0');
-      }
-      break;
-  
-    // Close the connection
-    case '0':
-      if (gp.isConnected())
-      {       
-        gp.end();
-        espSerialGoPro.print('1');
-        Serial.println("gp.end()");
-      }
-      else
-      {
-        espSerialGoPro.print('0');      
-      }
-      break;
+      Serial.println("RECEIVED ESCAPE!");
+      bGoProCommand = true;
     }
+    else
+    {
+      ble_send(sBuff);
+    }
+  }
+
+//  return;
+
+#if 1
+  if (bGoProCommand)
+  {
+    while (espSerialPhone.available() == 0)
+    ;
+    
+    if (espSerialPhone.available() > 0)
+    {
+      in = espSerialPhone.read();
+  #if DEBUG_OUTPUT
+  {
+  Serial.println("**********");
+  Serial.println(in);
+  Serial.println("**********");
+  }
+  #endif
+  
+  
+  //////////////////////////////////////////////////////////////////////
+  #if 1
+      switch (in)
+      {
+      default:
+        break;
+  #if 0  
+      // Connect
+      case 'b':
+        if (gp.isConnected())
+        {
+          Serial.println("Already connected!");
+          break;
+        }
+    
+        lStartTimeMS = millis();
+        while ((iRet = gp.begin()) != 1)
+        {
+          Serial.print("gp.begin() = ");
+          Serial.println(iRet);
+          delay(2500);
+          if (millis() > (lStartTimeMS + GOPRO_CONNECT_TIMEOUT))
+          {
+            Serial.println("Connection failed, TIMEOUT");
+            break;
+          }
+        }
+        if (gp.isConnected() == false)
+        {
+          Serial.println("Probably connection lost!");
+        }
+        break;
+    
+      case 'c':
+        Serial.print("Connected: ");
+        if (gp.isConnected())
+        {
+          Serial.println("Yes");
+          espSerialGoPro.print('1');
+        }
+        else
+        {
+          Serial.println("No");
+          espSerialGoPro.print('0');
+        }
+        break;
+    
+      case 'p':
+        gp.confirmPairing();
+        break;
+    
+      case 's':
+        Serial.println("Status:");
+        gp.getStatus();
+        break;
+    
+      case 'm':
+        Serial.println("Media List:");
+        gp.getMediaList();
+        break;
+    
+      // Turn on and off
+      case 'T':
+        gp.turnOn();
+        break;
+    
+      case 't':
+        gp.turnOff();
+        break;
+    
+      // Take a picture or start a video
+      case 'A':
+        if (gp.isConnected())
+        {       
+          gp.shoot();
+          espSerialGoPro.print('1');
+        }
+        else
+        {
+          Serial.println("A failed: Not Connected");
+          espSerialGoPro.print('0');      
+        }
+        break;
+    
+      // Stop the video
+      case 'S':
+        if (gp.isConnected())
+        {       
+          gp.stopShoot();
+          espSerialGoPro.print('1');
+        }
+        else
+        {
+          Serial.println("S failed: Not Connected");
+          espSerialGoPro.print('0');      
+        }
+        break;
+    
+      // Check if it is recording
+      case 'r':
+        Serial.print("Recording: ");
+        Serial.println(gp.isRecording() == true ? "Yes" : "No");
+        break;
+    
+      // Set modes
+      case 'V':
+        if (gp.isConnected())
+        {       
+          gp.setMode(VIDEO_MODE);
+          espSerialGoPro.print('1');
+        }
+        else
+        {
+          Serial.println("V failed: Not Connected");
+          espSerialGoPro.print('0');      
+        }
+        break;
+    
+      case 'P':
+        if (gp.isConnected())
+        {       
+          gp.setMode(PHOTO_MODE);
+          espSerialGoPro.print('1');
+        }
+        else
+        {
+          Serial.println("P failed: Not Connected");
+          espSerialGoPro.print('0');      
+        }
+        break;
+    
+      case 'M':
+        gp.setMode(MULTISHOT_MODE);
+        break;
+    
+      // Change the orientation
+      case 'U':
+        gp.setOrientation(ORIENTATION_UP);
+        break;
+    
+      case 'D':
+        gp.setOrientation(ORIENTATION_DOWN);
+        break;
+    
+      // Change other parameters
+      case 'f':
+        gp.setVideoFov(MEDIUM_FOV);
+        break;
+    
+      case 'F':
+        gp.setFrameRate(FR_120);
+        break;
+    
+      case 'R':
+        gp.setVideoResolution(VR_1080p);
+        break;
+    
+      case 'h':
+        gp.setPhotoResolution(PR_12MP_WIDE);
+        break;
+    
+      case 'L':
+        gp.setTimeLapseInterval(60);
+        break;
+    
+      // Localize the camera
+      case 'O':
+        gp.localizationOn();
+        break;
+    
+      case 'o':
+        gp.localizationOff();
+        break;
+    
+      // Delete some files, be carefull!
+      case 'l':
+        gp.deleteLast();
+        break;
+    
+      case 'g':
+        gp.deleteAll();
+        break;
+    
+      // Print useful data
+      case 'd':
+        gp.printStatus();
+        break;
+    
+      // Close the connection
+      case 'X':
+        gp.end();
+        break;
+    
+  #endif
+  
+      // Get current time
+      case '2':
+      {
+        struct tm timeinfo;
+        if(!getLocalTime(&timeinfo)){
+          Serial.println("Failed to obtain time");
+          return;
+        }
+        espSerialPhone.print(&timeinfo, "%Y-%m-%d %H:%M:%S");
+        //GetLocalTime();
+        //espSerialPhone.print(timeBuffer);
+        break;
+      }    
+  
+  #if 0      
+      // Open the connection
+      case '1':
+        lStartTimeMS = millis();
+        while ((iRet = gp.begin()) != 1)
+        {
+          Serial.print("gp.begin() = ");
+          Serial.println(iRet);
+          delay(2500);
+          if (millis() > (lStartTimeMS + GOPRO_CONNECT_TIMEOUT))
+          {
+            Serial.println("Connection failed, TIMEOUT");
+            break;
+          }
+        }
+        
+        if (gp.isConnected())
+        {
+          Serial.println("CONNECTED");
+          //gp.setMode(VIDEO_MODE);
+          espSerialGoPro.print('1');
+        }
+        else
+        {
+          Serial.print("CONNECTION FAILED!");
+          espSerialGoPro.print('0');
+        }
+        break;
+    
+      // Close the connection
+      case '0':
+        if (gp.isConnected())
+        {       
+          gp.end();
+          espSerialGoPro.print('1');
+          Serial.println("gp.end()");
+        }
+        else
+        {
+          espSerialGoPro.print('0');      
+        }
+        break;
+  #endif      
+      }
 #endif
 //////////////////////////////////////////////////////////////////////
   }
+#endif
 
+}
 //  if (gp.isConnected())
 //    gp.keepAlive(); // not needed on HERO3
 
 
-#if 0
+#if 1
   if (deviceConnected == false)
   {
     Serial.println("Waiting for BluefruitConnect -> ESP32 (Connect) -> UART");
@@ -1247,7 +1294,7 @@ void printLocalTime()
     Serial.println("Failed to obtain time");
     return;
   }
-  Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
+  Serial.println(&timeinfo, "%Y-%m-%d %H:%M:%S");
 }
 
 void SendString_ble(char *str)
