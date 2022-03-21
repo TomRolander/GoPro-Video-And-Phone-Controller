@@ -439,9 +439,12 @@ void on_ble_receive(std::string msg)
   int iCommand = 0;
   strcpy(strCommand, msg.c_str());
 
+#if 1
 Serial.print("strCommand = [");
 Serial.print(strCommand);
 Serial.println("]");
+#endif
+
   if (strncmp(strCommand, "14", 2) == 0)
   {
     daylightOffset_sec = 3600;
@@ -459,7 +462,8 @@ Serial.println("]");
 
   espSerialPhone.print(strCommand);
 //  return;
-  
+
+#if 0  
   if (isDigit(strCommand[0]) &&
       isDigit(strCommand[1]))
   {
@@ -509,6 +513,7 @@ Serial.println("]");
   {
     //HelpDisplay();
   }
+#endif  
 }
 
 class MyServerCallbacks : public BLEServerCallbacks
@@ -686,119 +691,40 @@ void loop()
     if (espSerialPhone.available() > 0)
     {
       in = espSerialPhone.read();
-  #if DEBUG_OUTPUT
+#if DEBUG_OUTPUT
   {
   Serial.println("**********");
   Serial.println(in);
   Serial.println("**********");
   }
-  #endif
+#endif
   
   
   //////////////////////////////////////////////////////////////////////
-  #if 1
       switch (in)
       {
       default:
         break;
-  #if 0  
-      // Connect
-      case 'b':
-        if (gp.isConnected())
-        {
-          Serial.println("Already connected!");
-          break;
-        }
-    
-        lStartTimeMS = millis();
-        while ((iRet = gp.begin()) != 1)
-        {
-          Serial.print("gp.begin() = ");
-          Serial.println(iRet);
-          delay(2500);
-          if (millis() > (lStartTimeMS + GOPRO_CONNECT_TIMEOUT))
-          {
-            Serial.println("Connection failed, TIMEOUT");
-            break;
-          }
-        }
-        if (gp.isConnected() == false)
-        {
-          Serial.println("Probably connection lost!");
-        }
-        break;
-    
-      case 'c':
-        Serial.print("Connected: ");
-        if (gp.isConnected())
-        {
-          Serial.println("Yes");
-          espSerialGoPro.print('1');
-        }
-        else
-        {
-          Serial.println("No");
-          espSerialGoPro.print('0');
-        }
-        break;
-    
-      case 'p':
-        gp.confirmPairing();
-        break;
-    
-      case 's':
-        Serial.println("Status:");
-        gp.getStatus();
-        break;
-    
-      case 'm':
-        Serial.println("Media List:");
-        gp.getMediaList();
-        break;
-    
-      // Turn on and off
-      case 'T':
-        gp.turnOn();
-        break;
-    
-      case 't':
-        gp.turnOff();
-        break;
-    
+
+#if 1
       // Take a picture or start a video
       case 'A':
-        if (gp.isConnected())
-        {       
-          gp.shoot();
-          espSerialGoPro.print('1');
-        }
-        else
-        {
-          Serial.println("A failed: Not Connected");
-          espSerialGoPro.print('0');      
-        }
+        bluefruitconnectstartrecording = true;
+        bluefruitconnectstoprecording = false;
+        SendString_ble("00 Start Recording\n");
+        espSerialPhone.print('1');
         break;
     
       // Stop the video
       case 'S':
-        if (gp.isConnected())
-        {       
-          gp.stopShoot();
-          espSerialGoPro.print('1');
-        }
-        else
-        {
-          Serial.println("S failed: Not Connected");
-          espSerialGoPro.print('0');      
-        }
+        bluefruitconnectstartrecording = false;
+        bluefruitconnectstoprecording = true;
+        SendString_ble("99 Stop Recording\n");
+        espSerialPhone.print('1');
         break;
-    
-      // Check if it is recording
-      case 'r':
-        Serial.print("Recording: ");
-        Serial.println(gp.isRecording() == true ? "Yes" : "No");
-        break;
-    
+#endif
+
+#if 0
       // Set modes
       case 'V':
         if (gp.isConnected())
@@ -824,72 +750,10 @@ void loop()
           Serial.println("P failed: Not Connected");
           espSerialGoPro.print('0');      
         }
-        break;
-    
-      case 'M':
-        gp.setMode(MULTISHOT_MODE);
-        break;
-    
-      // Change the orientation
-      case 'U':
-        gp.setOrientation(ORIENTATION_UP);
-        break;
-    
-      case 'D':
-        gp.setOrientation(ORIENTATION_DOWN);
-        break;
-    
-      // Change other parameters
-      case 'f':
-        gp.setVideoFov(MEDIUM_FOV);
-        break;
-    
-      case 'F':
-        gp.setFrameRate(FR_120);
-        break;
-    
-      case 'R':
-        gp.setVideoResolution(VR_1080p);
-        break;
-    
-      case 'h':
-        gp.setPhotoResolution(PR_12MP_WIDE);
-        break;
-    
-      case 'L':
-        gp.setTimeLapseInterval(60);
-        break;
-    
-      // Localize the camera
-      case 'O':
-        gp.localizationOn();
-        break;
-    
-      case 'o':
-        gp.localizationOff();
-        break;
-    
-      // Delete some files, be carefull!
-      case 'l':
-        gp.deleteLast();
-        break;
-    
-      case 'g':
-        gp.deleteAll();
-        break;
-    
-      // Print useful data
-      case 'd':
-        gp.printStatus();
-        break;
-    
-      // Close the connection
-      case 'X':
-        gp.end();
-        break;
-    
-  #endif
-  
+        break;    
+#endif
+
+#if 1  
       // Get current time
       case '2':
       {
@@ -903,8 +767,9 @@ void loop()
         //espSerialPhone.print(timeBuffer);
         break;
       }    
+#endif
   
-  #if 0      
+#if 0      
       // Open the connection
       case '1':
         lStartTimeMS = millis();
@@ -946,14 +811,14 @@ void loop()
           espSerialGoPro.print('0');      
         }
         break;
-  #endif      
+#endif      
       }
-#endif
 //////////////////////////////////////////////////////////////////////
   }
-#endif
 
 }
+#endif
+
 //  if (gp.isConnected())
 //    gp.keepAlive(); // not needed on HERO3
 
@@ -1017,7 +882,7 @@ void loop()
       Serial.println("Taking video...");
 
       StartVideo();
-      
+#if 0      
       while ( /*(digitalRead(buttonPin) == LOW) || */
               (bluefruitconnectstartrecording == true));
       {
@@ -1032,6 +897,7 @@ void loop()
           return;        
         }
       }
+#endif      
   } 
   else 
   if (doScan) 
