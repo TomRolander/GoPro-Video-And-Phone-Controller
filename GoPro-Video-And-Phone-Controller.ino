@@ -860,6 +860,16 @@ void loop()
     return;
   }
     
+  if ( /*(digitalRead(buttonPin) == HIGH) || */
+      (bluefruitconnectstoprecording == true))
+  {
+    bluefruitconnectstartrecording = false;
+    bluefruitconnectstoprecording = false;
+    StopVideo();
+    keepAliveTicker = millis();
+    return;        
+  }
+  
   if ( /*(digitalRead(buttonPin) == LOW) || */
       (bluefruitconnectstartrecording == true))
   {
@@ -882,6 +892,7 @@ void loop()
       Serial.println("Taking video...");
 
       StartVideo();
+      bluefruitconnectstartrecording = false;
 #if 0      
       while ( /*(digitalRead(buttonPin) == LOW) || */
               (bluefruitconnectstartrecording == true));
