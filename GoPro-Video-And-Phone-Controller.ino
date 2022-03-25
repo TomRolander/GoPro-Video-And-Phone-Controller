@@ -47,8 +47,6 @@ int   daylightOffset_sec = 3600;  //  = 0;
 
 SoftwareSerial espSerialPhone(19,18);
 
-SoftwareSerial espSerialGoPro(17,16);
-
 //BLE Connection variables
 
 #define SERVICE_UUID "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
@@ -96,8 +94,6 @@ static BLERemoteCharacteristic* pQueryCharacteristic;
 static BLERemoteCharacteristic* pQueryResponseCharacteristic;
 
 static BLEAdvertisedDevice* myDevice;
-
-//const int buttonPin = 13;
 
 static long keepAliveTicker = 0;
 static long ticker = 0;
@@ -439,81 +435,12 @@ void on_ble_receive(std::string msg)
   int iCommand = 0;
   strcpy(strCommand, msg.c_str());
 
-#if 1
-Serial.print("strCommand = [");
+#if DEBUG_OUTPUT
+Serial.print("strCommand = ");
 Serial.print(strCommand);
-Serial.println("]");
 #endif
 
-  if (strncmp(strCommand, "14", 2) == 0)
-  {
-    daylightOffset_sec = 3600;
-    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-    printLocalTime();
-//    return;    
-  }
-  if (strncmp(strCommand, "15", 2) == 0)
-  {
-    daylightOffset_sec = 0;
-    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-    printLocalTime();
-//    return;    
-  }
-
   espSerialPhone.print(strCommand);
-//  return;
-
-#if 0  
-  if (isDigit(strCommand[0]) &&
-      isDigit(strCommand[1]))
-  {
-    iCommand = ((strCommand[0]-'0')*10) + (strCommand[1]-'0');
-    Serial.print("iCommand = ");
-    Serial.println(iCommand);
-
-    switch (iCommand)
-    {
-      case 0:
-        bluefruitconnectstartrecording = true;
-        bluefruitconnectstoprecording = false;
-        SendString_ble("00 Start Recording\n");
-        break;
-
-      case 9:
-      {
-        SendString_ble("09 NTP ");
-
-        struct tm timeinfo;
-        if(!getLocalTime(&timeinfo))
-        {
-          Serial.println("Failed to obtain time");
-          return;
-        }
-        char cbuf[16];
-        sprintf(cbuf, "%02i:%02i:%02i", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
-        //GetDateTime();
-        Serial.println(&timeinfo, "%Y-%m-%d %H:%M:%S");
-        SendString_ble(cbuf);
-        SendString_ble("\n");
-        break;
-      }
-
-      case 99:
-      {
-        bluefruitconnectstartrecording = false;
-        bluefruitconnectstoprecording = true;
-        SendString_ble("99 Stop Recording\n");
-      }
-
-      default:
-        break;
-    }
-  }
-  else
-  {
-    //HelpDisplay();
-  }
-#endif  
 }
 
 class MyServerCallbacks : public BLEServerCallbacks
@@ -546,17 +473,16 @@ void setup() {
   Serial.begin(115200);
   delay(2000);
 
-  espSerialPhone.begin(1200);
-  espSerialGoPro.begin(1200);
+  espSerialPhone.begin(600);
   
   Serial.println("");
   Serial.println(PROGRAM);
   Serial.println(VERSION);  
 
-// pinMode(buttonPin, INPUT_PULLUP);
   pinMode(2, OUTPUT);
   digitalWrite(2, LOW);
 
+#if 1
   Serial.println("Starting WiFi client...");
     Serial.printf("Connecting to %s ", ssid);
   WiFi.begin(ssid, password);
@@ -573,6 +499,7 @@ void setup() {
   //disconnect WiFi as it's no longer needed
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
+#endif
 
   BLEDevice::init("ESP32 GoPro");
 
@@ -670,19 +597,11 @@ void loop()
     sBuff[0] = espSerialPhone.read();
 
     if (sBuff[0] == 0x1B)
-    {
-      Serial.println("RECEIVED ESCAPE!");
       bGoProCommand = true;
-    }
     else
-    {
       ble_send(sBuff);
-    }
   }
 
-//  return;
-
-#if 1
   if (bGoProCommand)
   {
     while (espSerialPhone.available() == 0)
@@ -693,9 +612,9 @@ void loop()
       in = espSerialPhone.read();
 #if DEBUG_OUTPUT
   {
-  Serial.println("**********");
-  Serial.println(in);
-  Serial.println("**********");
+  Serial.print("GoProCommand = ESC,");
+  Serial.print(in);
+  Serial.println("");
   }
 #endif
   
@@ -706,12 +625,11 @@ void loop()
       default:
         break;
 
-#if 1
       // Take a picture or start a video
       case 'A':
         bluefruitconnectstartrecording = true;
         bluefruitconnectstoprecording = false;
-        SendString_ble("00 Start Recording\n");
+        //SendString_ble("00 Start Recording\n");
         espSerialPhone.print('1');
         break;
     
@@ -719,41 +637,23 @@ void loop()
       case 'S':
         bluefruitconnectstartrecording = false;
         bluefruitconnectstoprecording = true;
-        SendString_ble("99 Stop Recording\n");
+        //SendString_ble("Stop Recording\n");
+//        espSerialPhone.print('1');
+// Note: reply with '1' after video is stopped and written to SD card
+        break;
+
+      // Set Video mode
+      case 'V':
+        SetVideoMode();  
         espSerialPhone.print('1');
         break;
-#endif
 
-#if 0
-      // Set modes
-      case 'V':
-        if (gp.isConnected())
-        {       
-          gp.setMode(VIDEO_MODE);
-          espSerialGoPro.print('1');
-        }
-        else
-        {
-          Serial.println("V failed: Not Connected");
-          espSerialGoPro.print('0');      
-        }
-        break;
-    
+      // Set Photo mode
       case 'P':
-        if (gp.isConnected())
-        {       
-          gp.setMode(PHOTO_MODE);
-          espSerialGoPro.print('1');
-        }
-        else
-        {
-          Serial.println("P failed: Not Connected");
-          espSerialGoPro.print('0');      
-        }
-        break;    
-#endif
-
-#if 1  
+        SetPhotoMode();
+        espSerialPhone.print('1');
+        break;
+                
       // Get current time
       case '2':
       {
@@ -767,63 +667,40 @@ void loop()
         //espSerialPhone.print(timeBuffer);
         break;
       }    
-#endif
-  
-#if 0      
+
+      case '3':
+      {
+        daylightOffset_sec = 3600;
+        configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+        printLocalTime();
+        espSerialPhone.print('1');
+        break;
+      }
+
+      case '4':
+      {
+        daylightOffset_sec = 0;
+        configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+        printLocalTime();
+        espSerialPhone.print('1');
+        break;
+      }
+
       // Open the connection
       case '1':
-        lStartTimeMS = millis();
-        while ((iRet = gp.begin()) != 1)
-        {
-          Serial.print("gp.begin() = ");
-          Serial.println(iRet);
-          delay(2500);
-          if (millis() > (lStartTimeMS + GOPRO_CONNECT_TIMEOUT))
-          {
-            Serial.println("Connection failed, TIMEOUT");
-            break;
-          }
-        }
-        
-        if (gp.isConnected())
-        {
-          Serial.println("CONNECTED");
-          //gp.setMode(VIDEO_MODE);
-          espSerialGoPro.print('1');
-        }
-        else
-        {
-          Serial.print("CONNECTION FAILED!");
-          espSerialGoPro.print('0');
-        }
+        espSerialPhone.print('1');
         break;
     
       // Close the connection
       case '0':
-        if (gp.isConnected())
-        {       
-          gp.end();
-          espSerialGoPro.print('1');
-          Serial.println("gp.end()");
-        }
-        else
-        {
-          espSerialGoPro.print('0');      
-        }
+        espSerialPhone.print('1');
         break;
-#endif      
       }
 //////////////////////////////////////////////////////////////////////
   }
 
 }
-#endif
 
-//  if (gp.isConnected())
-//    gp.keepAlive(); // not needed on HERO3
-
-
-#if 1
   if (deviceConnected == false)
   {
     Serial.println("Waiting for BluefruitConnect -> ESP32 (Connect) -> UART");
@@ -860,18 +737,17 @@ void loop()
     return;
   }
     
-  if ( /*(digitalRead(buttonPin) == HIGH) || */
-      (bluefruitconnectstoprecording == true))
+  if (bluefruitconnectstoprecording)
   {
     bluefruitconnectstartrecording = false;
     bluefruitconnectstoprecording = false;
     StopVideo();
+    espSerialPhone.print('1');
     keepAliveTicker = millis();
     return;        
   }
   
-  if ( /*(digitalRead(buttonPin) == LOW) || */
-      (bluefruitconnectstartrecording == true))
+  if (bluefruitconnectstartrecording)
   {
     digitalWrite(2, HIGH);
   }
@@ -888,34 +764,16 @@ void loop()
 
   if (connectedBLE == true)
   {
-      //While button is pressed, take video
       Serial.println("Taking video...");
 
       StartVideo();
       bluefruitconnectstartrecording = false;
-#if 0      
-      while ( /*(digitalRead(buttonPin) == LOW) || */
-              (bluefruitconnectstartrecording == true));
-      {
-        delay(500);
-        if ( /*(digitalRead(buttonPin) == HIGH) || */
-            (bluefruitconnectstoprecording == true))
-        {
-          bluefruitconnectstartrecording = false;
-          bluefruitconnectstoprecording = false;
-          StopVideo();
-          keepAliveTicker = millis();
-          return;        
-        }
-      }
-#endif      
   } 
   else 
   if (doScan) 
   {
     BLEDevice::getScan()->start(0);  // this is just example to start scan after disconnect, most likely there is better way to do it in arduino
   }
-#endif
   delay(500); // Delay a second between loops.
 
 } // End of loop
