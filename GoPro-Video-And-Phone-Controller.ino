@@ -20,7 +20,7 @@
  **************************************************************************/
 
 #define PROGRAM "GoPro Video and Phone Controller"
-#define VERSION "Ver 0.1 2022-03-10"
+#define VERSION "Ver 0.2 2022-03-26"
 
 #define DEBUG_OUTPUT 1
 
@@ -94,6 +94,8 @@ static BLERemoteCharacteristic* pQueryCharacteristic;
 static BLERemoteCharacteristic* pQueryResponseCharacteristic;
 
 static BLEAdvertisedDevice* myDevice;
+
+static bool bProcessing = false;
 
 static long keepAliveTicker = 0;
 static long ticker = 0;
@@ -688,11 +690,13 @@ void loop()
 
       // Open the connection
       case '1':
+        bProcessing = true;
         espSerialPhone.print('1');
         break;
     
       // Close the connection
       case '0':
+        bProcessing = false;
         espSerialPhone.print('1');
         break;
       }
@@ -714,7 +718,8 @@ void loop()
   {
     if (millis() > (keepAliveTicker + 120000))
     {
-      KeepAlive();
+      if (bProcessing == false)
+        KeepAlive();
       keepAliveTicker = millis();
     }
   }
