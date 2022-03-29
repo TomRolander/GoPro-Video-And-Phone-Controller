@@ -36,6 +36,7 @@
 #include <WiFi.h>
 #include "time.h"
 #include <SoftwareSerial.h>
+#include <HardwareSerial.h>
 
 const char* ssid     = "Stanford";                    // your network SSID (name)
 const char* password = "";                    // your network password
@@ -45,7 +46,10 @@ const long  gmtOffset_sec = -(8*3600);
 int   daylightOffset_sec = 3600;  //  = 0;
 
 
-SoftwareSerial espSerialPhone(19,18);
+//SoftwareSerial espSerialPhone(16,17);
+
+#define RXD2  16
+#define TXD2  17
 
 //BLE Connection variables
 
@@ -96,6 +100,7 @@ static BLERemoteCharacteristic* pQueryResponseCharacteristic;
 static BLEAdvertisedDevice* myDevice;
 
 static bool bProcessing = false;
+static bool bAborting = false;
 
 static long keepAliveTicker = 0;
 static long ticker = 0;
@@ -442,7 +447,18 @@ Serial.print("strCommand = ");
 Serial.print(strCommand);
 #endif
 
-  espSerialPhone.print(strCommand);
+#if 0
+  if (strcmp(strCommand, "99") == 0)
+  {
+    bAborting = true;
+    if (bProcessing)
+    {
+      StopVideo();
+    }
+  }
+#endif
+
+  Serial2.print(strCommand);
 }
 
 class MyServerCallbacks : public BLEServerCallbacks
@@ -475,7 +491,8 @@ void setup() {
   Serial.begin(115200);
   delay(2000);
 
-  espSerialPhone.begin(600);
+  Serial2.begin(1200, SERIAL_8N1, RXD2, TXD2);
+//  Serial2.begin(1200);
   
   Serial.println("");
   Serial.println(PROGRAM);
@@ -593,10 +610,10 @@ void loop()
   int iRet;
   bool bGoProCommand = false;
 
-  if (espSerialPhone.available() > 0)
+  if (Serial2.available() > 0)
   {
     char sBuff[2] = " ";
-    sBuff[0] = espSerialPhone.read();
+    sBuff[0] = Serial2.read();
 
     if (sBuff[0] == 0x1B)
       bGoProCommand = true;
@@ -606,12 +623,12 @@ void loop()
 
   if (bGoProCommand)
   {
-    while (espSerialPhone.available() == 0)
+    while (Serial2.available() == 0)
     ;
     
-    if (espSerialPhone.available() > 0)
+    if (Serial2.available() > 0)
     {
-      in = espSerialPhone.read();
+      in = Serial2.read();
 #if DEBUG_OUTPUT
   {
   Serial.print("GoProCommand = ESC,");
@@ -629,10 +646,15 @@ void loop()
 
       // Take a picture or start a video
       case 'A':
+        if (bAborting)
+        {
+          Serial2.print('0');
+          break;          
+        }
         bluefruitconnectstartrecording = true;
         bluefruitconnectstoprecording = false;
         //SendString_ble("00 Start Recording\n");
-        espSerialPhone.print('1');
+        Serial2.print('1');
         break;
     
       // Stop the video
@@ -640,20 +662,20 @@ void loop()
         bluefruitconnectstartrecording = false;
         bluefruitconnectstoprecording = true;
         //SendString_ble("Stop Recording\n");
-//        espSerialPhone.print('1');
+//        Serial2.print('1');
 // Note: reply with '1' after video is stopped and written to SD card
         break;
 
       // Set Video mode
       case 'V':
         SetVideoMode();  
-        espSerialPhone.print('1');
+        Serial2.print('1');
         break;
 
       // Set Photo mode
       case 'P':
         SetPhotoMode();
-        espSerialPhone.print('1');
+        Serial2.print('1');
         break;
                 
       // Get current time
@@ -664,9 +686,9 @@ void loop()
           Serial.println("Failed to obtain time");
           return;
         }
-        espSerialPhone.print(&timeinfo, "%Y-%m-%d %H:%M:%S");
+        Serial2.print(&timeinfo, "%Y-%m-%d %H:%M:%S");
         //GetLocalTime();
-        //espSerialPhone.print(timeBuffer);
+        //Serial2.print(timeBuffer);
         break;
       }    
 
@@ -675,7 +697,7 @@ void loop()
         daylightOffset_sec = 3600;
         configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
         printLocalTime();
-        espSerialPhone.print('1');
+        Serial2.print('1');
         break;
       }
 
@@ -684,20 +706,30 @@ void loop()
         daylightOffset_sec = 0;
         configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
         printLocalTime();
-        espSerialPhone.print('1');
+        Serial2.print('1');
         break;
       }
 
       // Open the connection
       case '1':
+        if (bAborting)
+        {
+          Serial2.print('0');
+          break;          
+        }
         bProcessing = true;
-        espSerialPhone.print('1');
+        Serial2.print('1');
         break;
     
       // Close the connection
       case '0':
         bProcessing = false;
-        espSerialPhone.print('1');
+        Serial2.print('1');
+        break;
+
+      // Abort operation
+      case 'X':
+        Serial2.print('1');
         break;
       }
 //////////////////////////////////////////////////////////////////////
@@ -738,7 +770,8 @@ void loop()
         digitalWrite(2, LOW);
       }
     }
-    delay(500); // Delay a second between loops.
+    if (bAborting == false)
+      delay(500); // Delay between loops.
     return;
   }
     
@@ -747,7 +780,7 @@ void loop()
     bluefruitconnectstartrecording = false;
     bluefruitconnectstoprecording = false;
     StopVideo();
-    espSerialPhone.print('1');
+    Serial2.print('1');
     keepAliveTicker = millis();
     return;        
   }
