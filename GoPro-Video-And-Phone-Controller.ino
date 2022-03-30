@@ -682,10 +682,12 @@ void loop()
       case '2':
       {
         struct tm timeinfo;
+        Serial.println("Obtain time");
         if(!getLocalTime(&timeinfo)){
           Serial.println("Failed to obtain time");
           return;
         }
+        Serial.println(&timeinfo, "%Y-%m-%d %H:%M:%S");
         Serial2.print(&timeinfo, "%Y-%m-%d %H:%M:%S");
         //GetLocalTime();
         //Serial2.print(timeBuffer);
