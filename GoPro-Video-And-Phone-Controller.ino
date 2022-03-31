@@ -20,7 +20,7 @@
  **************************************************************************/
 
 #define PROGRAM "GoPro Video and Phone Controller"
-#define VERSION "Ver 0.2 2022-03-26"
+#define VERSION "Ver 0.3 2022-03-31"
 
 #define DEBUG_OUTPUT 1
 
@@ -494,23 +494,29 @@ void setup() {
   Serial2.begin(1200, SERIAL_8N1, RXD2, TXD2);
 //  Serial2.begin(1200);
   
+#if DEBUG_OUTPUT
   Serial.println("");
   Serial.println(PROGRAM);
   Serial.println(VERSION);  
+#endif
 
   pinMode(2, OUTPUT);
   digitalWrite(2, LOW);
 
 #if 1
+
+#if DEBUG_OUTPUT
   Serial.println("Starting WiFi client...");
-    Serial.printf("Connecting to %s ", ssid);
+  Serial.printf("Connecting to %s ", ssid);
+#endif  
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
       delay(500);
       Serial.print(".");
   }
+#if DEBUG_OUTPUT
   Serial.println(" CONNECTED");
-  
+#endif
   //init and get the time
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
   printLocalTime();
@@ -522,9 +528,10 @@ void setup() {
 
   BLEDevice::init("ESP32 GoPro");
 
+#if DEBUG_OUTPUT
   Serial.println("Starting BLE Client...");
-
   Serial.println("Launch BluefruitConnect on your iPhone or Android"); 
+#endif
    
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
@@ -548,10 +555,14 @@ void setup() {
   pService->start();
   pServer->getAdvertising()->start();
   
+#if DEBUG_OUTPUT
   Serial.println("Waiting for BluefruitConnect -> ESP32 GoPro -> Connect");
+#endif  
   while (deviceConnected == false)
   {
+#if DEBUG_OUTPUT
     Serial.print(".");
+#endif
     digitalWrite(2, HIGH);
     delay(250);
     digitalWrite(2, LOW);
@@ -561,12 +572,12 @@ void setup() {
     digitalWrite(2, LOW);
     delay(500);
   }
-  Serial.println(" -> UART (within 5 seconds;)");
-  delay(5000);
-//  HelpDisplay();
+  
+#if DEBUG_OUTPUT
+  Serial.println(" -> UART");
   
   Serial.println("Starting BLE Client...");
-  //BLEDevice::init("");
+#endif
 
   keepAliveTicker = millis();
 
@@ -580,25 +591,64 @@ void setup() {
   pBLEScan->setActiveScan(true);
   pBLEScan->start(5, false);
 
+#if DEBUG_OUTPUT
   Serial.print("Scan for GoPro: ");
+#endif  
   while (foundBLEService == false)
   {
+#if DEBUG_OUTPUT
     Serial.print('*');
+#endif
     delay(1000);
   }
+#if DEBUG_OUTPUT
   Serial.println("");
+#endif
   
   if (connectToBLEServer() == false)
   {
+#if DEBUG_OUTPUT
     Serial.println("FAILED to find GoPro!");
-    
-    return;
+#endif    
+
+    while (true)
+    {
+      digitalWrite(2, HIGH);
+      delay(500);
+      digitalWrite(2, LOW);
+      delay(250);
+      digitalWrite(2, HIGH);
+      delay(500);
+      digitalWrite(2, LOW);
+      delay(250);
+      digitalWrite(2, HIGH);
+      delay(250);
+      digitalWrite(2, LOW);
+      delay(250);
+      digitalWrite(2, HIGH);
+      delay(250);
+      digitalWrite(2, LOW);
+      delay(500);
+    }
   }    
 
-    Serial.println("Connected to GoPro BLE Server.");
-    delay(1000);
+#if DEBUG_OUTPUT
+  Serial.println("Connected to GoPro BLE Server.");
+#endif
 
-    SetVideoMode();  
+  SetVideoMode();  
+
+  // Ping Master Controller until response
+  while (true)
+  {    
+    Serial2.print('X');
+    if (Serial2.available() > 0)
+    {
+      char cChar = Serial2.read();
+      if (cChar == 'X')
+        break; 
+    }
+  }
 
 } // End of setup.
 
