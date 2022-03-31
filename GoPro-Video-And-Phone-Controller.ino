@@ -638,6 +638,7 @@ void setup() {
 
   SetVideoMode();  
 
+#if 0
   // Ping Master Controller until response
   while (true)
   {    
@@ -645,10 +646,12 @@ void setup() {
     if (Serial2.available() > 0)
     {
       char cChar = Serial2.read();
-      if (cChar == 'X')
+      if (cChar == 'Y')
         break; 
     }
+    delay(1000);
   }
+#endif
 
 } // End of setup.
 
