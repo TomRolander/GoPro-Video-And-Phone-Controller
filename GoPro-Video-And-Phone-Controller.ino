@@ -62,11 +62,15 @@ BLEService *pService;
 BLECharacteristic *pTxCharacteristic;
 BLECharacteristic *pRxCharacteristic;
 
-bool deviceConnected = false;
+static bool bSetup = true;
+static bool bResponse = false;
+static char strResponse[64] = "";
+
+static bool deviceConnected = false;
 std::string rxValue = "";
 
-bool bluefruitconnectstartrecording = false;
-bool bluefruitconnectstoprecording = false;
+static bool bluefruitconnectstartrecording = false;
+static bool bluefruitconnectstoprecording = false;
 
 // GoPro Service UUID
 static BLEUUID serviceUUID_FEA6("0000fea6-0000-1000-8000-00805f9b34fb");
@@ -458,7 +462,15 @@ Serial.print(strCommand);
   }
 #endif
 
-  Serial2.print(strCommand);
+  if (bSetup)
+  {
+    bResponse = true;
+    strcpy(strResponse, strCommand);
+  }
+  else
+  {
+    Serial2.print(strCommand);
+  }
 }
 
 class MyServerCallbacks : public BLEServerCallbacks
@@ -579,6 +591,18 @@ void setup() {
   Serial.println("Starting BLE Client...");
 #endif
 
+  delay(10000);
+  
+  ble_send("Place GoPro in Connections mode and enter 'Y'\n");
+  while (bResponse == false)
+  {
+    delay(250);
+  }
+  ble_send(strResponse);
+  ble_send("\n");
+  bResponse = false;
+
+
   keepAliveTicker = millis();
 
   // Retrieve a Scanner and set the callback we want to use to be informed when we
@@ -591,22 +615,26 @@ void setup() {
   pBLEScan->setActiveScan(true);
   pBLEScan->start(5, false);
 
+  ble_send("Scan for GoPro\n");
 #if DEBUG_OUTPUT
   Serial.print("Scan for GoPro: ");
 #endif  
   while (foundBLEService == false)
   {
+    ble_send("*");
 #if DEBUG_OUTPUT
     Serial.print('*');
 #endif
     delay(1000);
   }
+  ble_send("\n");
 #if DEBUG_OUTPUT
   Serial.println("");
 #endif
   
   if (connectToBLEServer() == false)
   {
+    ble_send("FAILED to find GoPro!\n");
 #if DEBUG_OUTPUT
     Serial.println("FAILED to find GoPro!");
 #endif    
@@ -632,26 +660,16 @@ void setup() {
     }
   }    
 
+    ble_send("Connected to GoPro BLE Server.\n");
 #if DEBUG_OUTPUT
   Serial.println("Connected to GoPro BLE Server.");
 #endif
 
   SetVideoMode();  
 
-#if 0
-  // Ping Master Controller until response
-  while (true)
-  {    
-    Serial2.print('X');
-    if (Serial2.available() > 0)
-    {
-      char cChar = Serial2.read();
-      if (cChar == 'Y')
-        break; 
-    }
-    delay(1000);
-  }
-#endif
+  // Ping Master Controller that we are ready
+  ble_send("Signal master controller ready for GoPro commands\n");
+  Serial2.print('X');
 
 } // End of setup.
 
