@@ -20,7 +20,7 @@
  **************************************************************************/
 
 #define PROGRAM "GoPro Video and Phone Controller"
-#define VERSION "Ver 0.3 2022-03-31"
+#define VERSION "Ver 0.4 2022-04-03"
 
 #define DEBUG_OUTPUT 1
 
@@ -62,6 +62,7 @@ BLEService *pService;
 BLECharacteristic *pTxCharacteristic;
 BLECharacteristic *pRxCharacteristic;
 
+static bool bGoProEnabled = false;
 static bool bSetup = true;
 static bool bResponse = false;
 static char strResponse[64] = "";
@@ -499,7 +500,8 @@ class MyCallbacks : public BLECharacteristicCallbacks
 };
 
 
-void setup() {
+void setup() 
+{
   Serial.begin(115200);
   delay(2000);
 
@@ -592,85 +594,101 @@ void setup() {
 #endif
 
   delay(10000);
+
+  SendString_ble(PROGRAM);
+  SendString_ble(VERSION);
   
-  ble_send("Place GoPro in Connections mode and enter 'Y'\n");
+  SendString_ble("\n  Enter 'N' to run without GoPro");
+  SendString_ble("  Enter 'Y' to run with GoPro");
+  SendString_ble("    Before 'Y' put GoPro in");
+  SendString_ble("    CONNECT THE REMOTE");
+  
   while (bResponse == false)
   {
     delay(250);
   }
-  ble_send(strResponse);
-  ble_send("\n");
+  strupr(strResponse);
+  SendString_ble(strResponse);
   bResponse = false;
 
-
-  keepAliveTicker = millis();
-
-  // Retrieve a Scanner and set the callback we want to use to be informed when we
-  // have detected a new device.  Specify that we want active scanning and start the
-  // scan to run for 5 seconds.
-  BLEScan* pBLEScan = BLEDevice::getScan();
-  pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
-  pBLEScan->setInterval(1349);
-  pBLEScan->setWindow(449);
-  pBLEScan->setActiveScan(true);
-  pBLEScan->start(5, false);
-
-  ble_send("Scan for GoPro\n");
-#if DEBUG_OUTPUT
-  Serial.print("Scan for GoPro: ");
-#endif  
-  while (foundBLEService == false)
+  if (strResponse[0] != 'Y')
   {
-    ble_send("*");
-#if DEBUG_OUTPUT
-    Serial.print('*');
-#endif
-    delay(1000);
+    SendString_ble("GoPro disabled!");
   }
-  ble_send("\n");
+  else
+  {
+    bGoProEnabled = true;
+  
+    keepAliveTicker = millis();
+  
+    // Retrieve a Scanner and set the callback we want to use to be informed when we
+    // have detected a new device.  Specify that we want active scanning and start the
+    // scan to run for 5 seconds.
+    BLEScan* pBLEScan = BLEDevice::getScan();
+    pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
+    pBLEScan->setInterval(1349);
+    pBLEScan->setWindow(449);
+    pBLEScan->setActiveScan(true);
+    pBLEScan->start(5, false);
+  
+    SendString_ble("Scan for GoPro");
 #if DEBUG_OUTPUT
-  Serial.println("");
+    Serial.print("Scan for GoPro: ");
+#endif  
+    while (foundBLEService == false)
+    {
+      ble_send("*");
+#if DEBUG_OUTPUT
+      Serial.print('*');
+#endif
+      delay(1000);
+    }
+    ble_send("\n");
+#if DEBUG_OUTPUT
+    Serial.println("");
+#endif
+    
+    if (connectToBLEServer() == false)
+    {
+      SendString_ble("FAILED to find GoPro!");
+#if DEBUG_OUTPUT
+      Serial.println("FAILED to find GoPro!");
+#endif    
+  
+      while (true)
+      {
+        digitalWrite(2, HIGH);
+        delay(500);
+        digitalWrite(2, LOW);
+        delay(250);
+        digitalWrite(2, HIGH);
+        delay(500);
+        digitalWrite(2, LOW);
+        delay(250);
+        digitalWrite(2, HIGH);
+        delay(250);
+        digitalWrite(2, LOW);
+        delay(250);
+        digitalWrite(2, HIGH);
+        delay(250);
+        digitalWrite(2, LOW);
+        delay(500);
+      }
+    }    
+  
+      SendString_ble("Connected to GoPro BLE Server.");
+#if DEBUG_OUTPUT
+    Serial.println("Connected to GoPro BLE Server.");
 #endif
   
-  if (connectToBLEServer() == false)
-  {
-    ble_send("FAILED to find GoPro!\n");
-#if DEBUG_OUTPUT
-    Serial.println("FAILED to find GoPro!");
-#endif    
-
-    while (true)
-    {
-      digitalWrite(2, HIGH);
-      delay(500);
-      digitalWrite(2, LOW);
-      delay(250);
-      digitalWrite(2, HIGH);
-      delay(500);
-      digitalWrite(2, LOW);
-      delay(250);
-      digitalWrite(2, HIGH);
-      delay(250);
-      digitalWrite(2, LOW);
-      delay(250);
-      digitalWrite(2, HIGH);
-      delay(250);
-      digitalWrite(2, LOW);
-      delay(500);
-    }
-  }    
-
-    ble_send("Connected to GoPro BLE Server.\n");
-#if DEBUG_OUTPUT
-  Serial.println("Connected to GoPro BLE Server.");
-#endif
-
-  SetVideoMode();  
+    SetVideoMode();  
+  }
 
   // Ping Master Controller that we are ready
-  ble_send("Signal master controller ready for GoPro commands\n");
-  Serial2.print('X');
+  SendString_ble("Initialization completed.");
+  Serial2.print(strResponse[0]);
 
+  bSetup = false;
 } // End of setup.
 
 
@@ -717,7 +735,8 @@ void loop()
 
       // Take a picture or start a video
       case 'A':
-        if (bAborting)
+        if (bAborting == true ||
+            bGoProEnabled == false)
         {
           Serial2.print('0');
           break;          
@@ -730,6 +749,11 @@ void loop()
     
       // Stop the video
       case 'S':
+        if (bGoProEnabled == false)
+        {
+          Serial2.print('0');
+          break;
+        }        
         bluefruitconnectstartrecording = false;
         bluefruitconnectstoprecording = true;
         //SendString_ble("Stop Recording\n");
@@ -739,12 +763,22 @@ void loop()
 
       // Set Video mode
       case 'V':
+        if (bGoProEnabled == false)
+        {
+          Serial2.print('0');
+          break;
+        }        
         SetVideoMode();  
         Serial2.print('1');
         break;
 
       // Set Photo mode
       case 'P':
+        if (bGoProEnabled == false)
+        {
+          Serial2.print('0');
+          break;
+        }        
         SetPhotoMode();
         Serial2.print('1');
         break;
@@ -785,7 +819,8 @@ void loop()
 
       // Open the connection
       case '1':
-        if (bAborting)
+        if (bAborting == true ||
+            bGoProEnabled == false)
         {
           Serial2.print('0');
           break;          
@@ -797,6 +832,11 @@ void loop()
       // Close the connection
       case '0':
         bProcessing = false;
+        if (bGoProEnabled == false)
+        {
+          Serial2.print('0');
+          break;
+        }        
         Serial2.print('1');
         break;
 
@@ -1145,11 +1185,6 @@ void printLocalTime()
 
 void SendString_ble(char *str)
 {
-//  ble_send("AT+BLEUARTTX=");
   ble_send(str);
   ble_send("\n");
-  // check response stastus
-  //if (! ble.waitForOK() ) {
-    //Serial.println(F("Failed to send?"));
-  //}
 }
